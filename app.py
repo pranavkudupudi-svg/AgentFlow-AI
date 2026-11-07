@@ -29,6 +29,8 @@ with st.sidebar:
         "Hybrid (API first, local fallback)", "API only", "Local only"
     ])
     st.caption("Hybrid tries your configured API first, then a local Ollama model.")
+    if mode == "Local only":
+        st.info("Local CPU inference can take several minutes. Ollama timeout defaults to 600 seconds; concise source notes help.")
     st.divider()
     st.subheader("Backend setup")
     st.write("**API:** configure `.env` with an API key and model.")
@@ -66,7 +68,7 @@ if run_clicked:
             except LLMError as exc:
                 status.update(label="LLM backend unavailable", state="error")
                 st.error(str(exc))
-                st.info("Configure an API backend or start Ollama. You can also use the demo preview to test the interface.")
+                st.info("Check the selected backend and Ollama service. Local CPU inference may take several minutes.")
             except Exception as exc:
                 status.update(label="Workflow failed", state="error")
                 st.exception(exc)
@@ -100,10 +102,7 @@ if result:
         with st.expander(f"{i}. {agent['agent']} · {agent['backend']}", expanded=(i == 5)):
             st.markdown(agent["output"])
     st.subheader("Review-to-report traceability")
-    st.caption(
-        "The Report Writer is instructed to address every reviewer finding. "
-        "Inspect the response section in the final report to see how each issue was handled."
-    )
+    st.caption("The Report Writer is instructed to address every reviewer finding. Inspect the response section in the final report to see how each issue was handled.")
     if result.get("review"):
         with st.expander("Evidence Reviewer findings", expanded=False):
             st.markdown(result["review"])
