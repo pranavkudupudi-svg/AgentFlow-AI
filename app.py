@@ -88,10 +88,26 @@ if result:
             st.markdown(f"**{agent['agent'].replace(' Agent','')}**")
             st.success("Complete")
             st.caption(agent["backend"])
+            elapsed = agent.get("elapsed_seconds")
+            if elapsed is not None:
+                st.caption(f"Execution: {elapsed:.2f}s")
+    total_time = result.get("total_agent_seconds")
+    if total_time is not None and total_time > 0:
+        st.caption(f"Total model execution time (sum of agent calls): {total_time:.2f}s")
+
     st.subheader("Agent outputs")
     for i, agent in enumerate(result["agents"], start=1):
         with st.expander(f"{i}. {agent['agent']} · {agent['backend']}", expanded=(i == 5)):
             st.markdown(agent["output"])
+    st.subheader("Review-to-report traceability")
+    st.caption(
+        "The Report Writer is instructed to address every reviewer finding. "
+        "Inspect the response section in the final report to see how each issue was handled."
+    )
+    if result.get("review"):
+        with st.expander("Evidence Reviewer findings", expanded=False):
+            st.markdown(result["review"])
+
     st.subheader("Final research report")
     st.markdown(result["report"])
     pdf = build_pdf(result["topic"], result["report"])

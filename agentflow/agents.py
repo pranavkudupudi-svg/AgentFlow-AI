@@ -1,4 +1,5 @@
 from .llm import chat, LLMError
+import time
 
 SYSTEM = (
     "You are one role in a transparent multi-agent research workflow. "
@@ -11,8 +12,10 @@ def _run_agent(name, task, context, mode):
         {"role": "system", "content": SYSTEM + f" Your role is: {name}."},
         {"role": "user", "content": f"TASK:\n{task}\n\nPROJECT CONTEXT:\n{context}"},
     ]
+    started = time.perf_counter()
     answer, backend = chat(messages, mode=mode)
-    return {"agent": name, "output": answer, "backend": backend}
+    elapsed = time.perf_counter() - started
+    return {"agent": name, "output": answer, "backend": backend, "elapsed_seconds": round(elapsed, 2)}
 
 def run_workflow(topic, audience, purpose, source_notes="", mode="Hybrid (API first, local fallback)"):
     context = (
@@ -51,10 +54,14 @@ def run_workflow(topic, audience, purpose, source_notes="", mode="Hybrid (API fi
 
     review = _run_agent(
         "Evidence Review Agent",
-        "Audit the draft below for unsupported claims, missing evidence, overconfident "
+        "Audit the analysis below for unsupported claims, missing evidence, overconfident "
         "wording, internal inconsistencies, and questions needing verification. "
         "You cannot independently establish truth; do not claim that you have fact-checked "
-        "against external sources. Return a concise issue list and suggested corrections.\n\n"
+        "against external sources. Return numbered findings. For each finding include severity "
+        "(High/Medium/Low), the specific claim or section, why it is problematic relative to "
+        "the supplied evidence, the exact correction or qualification required, and whether "
+        "the issue can be resolved from supplied material. If no issues are found, say so. "
+        "Do not invent external sources.\n\n"
         "EVIDENCE BRIEF:\n" + research["output"] + "\n\nANALYSIS:\n" + analysis["output"],
         context, mode,
     )
@@ -63,17 +70,28 @@ def run_workflow(topic, audience, purpose, source_notes="", mode="Hybrid (API fi
     final = _run_agent(
         "Report Writer Agent",
         "Write a polished, well-structured research report for the stated audience and purpose. "
-        "Include: title, executive summary, scope, key findings, analysis, limitations, "
-        "open questions, and conclusion. Incorporate the evidence review. Never invent "
-        "references or present unsupported claims as established facts.\n\n"
+        "Treat the Evidence Review as mandatory revision instructions, not optional commentary. "
+        "Address EVERY numbered finding: correct the claim, qualify it, remove it, or explicitly "
+        "retain it as an unresolved question when supplied evidence cannot resolve it. Do not "
+        "repeat wording identified as overconfident unless properly qualified. Do not claim "
+        "external fact-checking. Include: title, executive summary, scope, key findings, analysis, "
+        "limitations, open questions, an 'Evidence Review Response' section mapping each finding "
+        "to the action taken, and conclusion. Never invent references or present unsupported "
+        "claims as established facts.\n\n"
         "PLAN:\n" + plan["output"] + "\n\nEVIDENCE:\n" + research["output"]
         + "\n\nANALYSIS:\n" + analysis["output"] + "\n\nREVIEW:\n" + review["output"],
         context, mode,
     )
     outputs.append(final)
 
-    return {"topic": topic, "audience": audience, "purpose": purpose,
-            "agents": outputs, "report": final["output"]}
+    return {
+        "topic": topic, "audience": audience, "purpose": purpose,
+        "agents": outputs, "report": final["output"],
+        "review": review["output"],
+        "total_agent_seconds": round(
+            sum(agent.get("elapsed_seconds", 0) for agent in outputs), 2
+        ),
+    }
 
 def demo_workflow(topic, audience, purpose, source_notes=""):
     """Transparent no-credentials fallback for UI testing; not an actual LLM run."""
@@ -100,5 +118,8 @@ def demo_workflow(topic, audience, purpose, source_notes=""):
         ("Report Writer Agent", report),
     ]
     return {"topic": topic, "audience": audience, "purpose": purpose,
-            "agents": [{"agent": n, "output": o, "backend": "DEMO — no LLM"} for n, o in stages],
-            "report": report}
+            "agents": [
+                {"agent": n, "output": o, "backend": "DEMO — no LLM", "elapsed_seconds": 0.0}
+                for n, o in stages
+            ],
+            "report": report, "review": stages[3][1], "total_agent_seconds": 0.0}
